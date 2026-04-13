@@ -4,6 +4,7 @@
   "Overwrite": true,
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "display-capture"
   ]
 }

@@ -46,7 +46,10 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
         scenario: {
           mode: isGroup ? ZegoUIKitPrebuilt.GroupCall : ZegoUIKitPrebuilt.OneONoneCall,
         },
-        showScreenSharingButton: true,
+        showScreenSharingButton: false, // Disabled to avoid "display-capture" permission policy errors in iframe
+        showMyCameraToggleButton: true,
+        showMyMicrophoneToggleButton: true,
+        showAudioVideoSettingsButton: true,
         onLeaveRoom: () => {
           onClose();
         }
