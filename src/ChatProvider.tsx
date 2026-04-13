@@ -151,30 +151,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             webToken = await getToken(messaging, {
-              vapidKey: 'YOUR_VAPID_KEY_IF_NEEDED' // Usually not needed if configured in firebase-applet-config.json
+              vapidKey: 'BDkFYX_gnBJ4-2nDlsMC211Pg74-2WssOOM4FYir042j8lHKxb71904OiqdcIF7sKNmbp3yQP5zlgK11Uk4Dwhs'
             });
           }
         }
 
         const finalToken = androidToken || webToken;
         
-        if (finalToken && finalToken !== currentUser.fcmToken) {
-          await updateDoc(doc(db, 'users', currentUser.uid), {
-            fcmToken: finalToken
-          });
-          setCurrentUser(prev => prev ? { ...prev, fcmToken: finalToken } : null);
+        if (finalToken) {
+          console.log('FCM Token:', finalToken);
+          if (finalToken !== currentUser.fcmToken) {
+            await updateDoc(doc(db, 'users', currentUser.uid), {
+              fcmToken: finalToken
+            });
+            setCurrentUser(prev => prev ? { ...prev, fcmToken: finalToken } : null);
+          }
         }
 
         // 3. Listen for foreground messages
         const unsubscribe = onMessage(messaging, (payload) => {
           console.log('Foreground message received:', payload);
           if (payload.notification) {
-            // You could show a custom toast here if you want
-            // For now, we'll just let the browser show it if possible
-            new Notification(payload.notification.title || 'New Message', {
-              body: payload.notification.body,
-              icon: '/logo.png'
-            });
+            const { title, body } = payload.notification;
+            if (Notification.permission === 'granted') {
+              new Notification(title || 'MonBox Message', {
+                body: body,
+                icon: '/logo.png'
+              });
+            }
           }
         });
 
