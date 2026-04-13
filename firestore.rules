@@ -123,16 +123,30 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'senderId', 'timestamp', 'type', 'status']) &&
              data.id is string &&
              data.senderId == request.auth.uid &&
-             data.timestamp is timestamp &&
-             data.type in ['text', 'image', 'voice', 'file'] &&
-             data.status in ['sent', 'delivered', 'seen'] &&
+             (data.timestamp is timestamp || data.timestamp == request.time) &&
+             data.type in ['text', 'image', 'voice', 'file', 'call'] &&
+             data.status in ['sent', 'delivered', 'seen', 'sending'] &&
              (!('text' in data) || (data.text is string || data.text == null)) &&
              (!('fileUrl' in data) || (data.fileUrl is string || data.fileUrl == null)) &&
              (!('reactions' in data) || data.reactions is map) &&
              (!('replyTo' in data) || (data.replyTo is map || data.replyTo == null)) &&
              (!('isDeleted' in data) || data.isDeleted is bool) &&
              (!('deletedFor' in data) || data.deletedFor is list) &&
-             (!('scheduledFor' in data) || (data.scheduledFor is timestamp || data.scheduledFor == null));
+             (!('scheduledFor' in data) || (data.scheduledFor is timestamp || data.scheduledFor == null)) &&
+             (!('callInfo' in data) || data.callInfo is map);
+    }
+
+    function isValidCall(data) {
+      return data.keys().hasAll(['callerId', 'receiverId', 'chatId', 'type', 'status', 'timestamp']) &&
+             data.callerId == request.auth.uid &&
+             data.type in ['audio', 'video'] &&
+             data.status in ['ringing', 'accepted', 'rejected', 'ended'] &&
+             (data.timestamp is timestamp || data.timestamp == request.time) &&
+             (!('callerName' in data) || (data.callerName is string || data.callerName == null)) &&
+             (!('callerPhoto' in data) || (data.callerPhoto is string || data.callerPhoto == null)) &&
+             (!('acceptedAt' in data) || (data.acceptedAt is timestamp || data.acceptedAt == request.time || data.acceptedAt == null)) &&
+             (!('endedAt' in data) || (data.endedAt is timestamp || data.endedAt == request.time || data.endedAt == null)) &&
+             (!('callMessageId' in data) || data.callMessageId is string);
     }
 
     // ===============================================================
@@ -171,7 +185,7 @@ service cloud.firestore {
 
     match /calls/{callId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
-      allow create: if isAuthenticated() && request.resource.data.callerId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidCall(request.resource.data);
       allow update: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
     }

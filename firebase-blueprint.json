@@ -69,6 +69,26 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "text", "timestamp"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "Represents a call signaling event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerPhoto": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "chatId": { "type": "string" },
+        "type": { "type": "string", "enum": ["audio", "video"] },
+        "status": { "type": "string", "enum": ["ringing", "accepted", "rejected", "ended"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "acceptedAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" },
+        "callMessageId": { "type": "string" }
+      },
+      "required": ["callerId", "receiverId", "chatId", "type", "status", "timestamp"]
     }
   },
   "firestore": {
@@ -87,6 +107,10 @@
     "/feedback/{feedbackId}": {
       "schema": "Feedback",
       "description": "Public feedback and suggestions."
+    },
+    "/calls/{callId}": {
+      "schema": "Call",
+      "description": "Call signaling documents."
     }
   }
 }

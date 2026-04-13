@@ -1438,7 +1438,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     try {
       // 1. Create the call log message first
-      const messageData: Omit<Message, 'id'> = {
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      const msgRef = doc(messagesRef);
+      const messageId = msgRef.id;
+
+      const messageData: Message = {
+        id: messageId,
         senderId: currentUser.uid,
         timestamp: serverTimestamp() as Timestamp,
         type: 'call',
@@ -1449,7 +1454,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
         status: 'sending'
       };
-      const msgRef = await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
+      await setDoc(msgRef, messageData);
 
       // 2. Create the call signaling doc
       const callData: Omit<Call, 'id'> = {
@@ -1461,7 +1466,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         type,
         status: 'ringing',
         timestamp: serverTimestamp() as Timestamp,
-        callMessageId: msgRef.id
+        callMessageId: messageId
       };
 
       const docRef = await addDoc(collection(db, 'calls'), callData);

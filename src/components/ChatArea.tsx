@@ -295,7 +295,7 @@ export default function ChatArea() {
   };
 
   const filteredMessages = messages?.filter(msg => 
-    msg.text.toLowerCase().includes(searchQuery.toLowerCase())
+    (msg.text || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const currentTheme = THEMES.find(t => t.id === activeChat.theme) || THEMES[0];
