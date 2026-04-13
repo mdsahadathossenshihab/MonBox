@@ -404,6 +404,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         .map(doc => doc.data() as User)
         .filter(u => u.uid !== currentUser.uid);
       setAllUsers(userList);
+      setUsers(userList); // Also update the main users list used for online status checks
     });
 
     return () => unsubscribe();

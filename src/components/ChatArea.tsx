@@ -77,7 +77,7 @@ export default function ChatArea() {
   const { activeChat, currentUser, sendMessage, uploadFile, users, setActiveChat, deleteMessage, addReaction, messages, toggleBlock, toggleRestrict, updateChatSettings } = useChat();
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -394,13 +394,13 @@ export default function ChatArea() {
             <Search className="w-4.5 h-4.5" />
           </button>
           <button 
-            onClick={() => setIsCallModalOpen(true)}
+            onClick={() => setCallType('video')}
             className="p-2 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-xl transition-all"
           >
             <Video className="w-4.5 h-4.5" />
           </button>
           <button 
-            onClick={() => setIsCallModalOpen(true)}
+            onClick={() => setCallType('audio')}
             className="p-2 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-xl transition-all"
           >
             <Phone className="w-4.5 h-4.5" />
@@ -855,10 +855,11 @@ export default function ChatArea() {
       )}
 
       <CallArea 
-        isOpen={isCallModalOpen} 
-        onClose={() => setIsCallModalOpen(false)} 
+        isOpen={!!callType} 
+        onClose={() => setCallType(null)} 
         chatId={activeChat.id}
         isGroup={activeChat.isGroup}
+        callType={callType || 'video'}
       />
 
       <audio 

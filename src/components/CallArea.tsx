@@ -8,9 +8,10 @@ interface CallAreaProps {
   chatId: string;
   onClose: () => void;
   isGroup?: boolean;
+  callType: 'audio' | 'video';
 }
 
-export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isGroup }) => {
+export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isGroup, callType }) => {
   const { currentUser } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -60,13 +61,15 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
       const zp = ZegoUIKitPrebuilt.create(kitToken);
       zpRef.current = zp;
 
+      const isVideoCall = callType === 'video';
+
       zp.joinRoom({
         container: containerRef.current,
         scenario: {
           mode: isGroup ? ZegoUIKitPrebuilt.GroupCall : ZegoUIKitPrebuilt.OneONoneCall,
         },
         showScreenSharingButton: false, 
-        showMyCameraToggleButton: hasCamera,
+        showMyCameraToggleButton: isVideoCall && hasCamera,
         showMyMicrophoneToggleButton: hasMic,
         showAudioVideoSettingsButton: true,
         showUserList: false, // Hide user list to feel less like a meeting
@@ -74,7 +77,7 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
         showNonVideoUser: true,
         showTextChat: false, // Hide chat inside call
         showPreJoinView: false, // Skip the "Join Room" preview screen
-        turnOnCameraWhenJoining: hasCamera,
+        turnOnCameraWhenJoining: isVideoCall && hasCamera,
         turnOnMicrophoneWhenJoining: hasMic,
         onLeaveRoom: () => {
           onClose();
@@ -95,7 +98,7 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
       }
       isInitializing.current = false;
     };
-  }, [chatId, currentUser, isGroup, onClose, isOpen]);
+  }, [chatId, currentUser, isGroup, onClose, isOpen, callType]);
 
   if (!isOpen) return null;
 
