@@ -6,13 +6,35 @@ import Auth from './components/Auth';
 import SettingsPage from './components/SettingsPage';
 import FeedbackBoard from './components/FeedbackBoard';
 import UserDiscovery from './components/UserDiscovery';
+import IncomingCallModal from './components/IncomingCallModal';
+import { CallArea } from './components/CallArea';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { MessageSquare, Shield, Sparkles } from 'lucide-react';
 
 function AppContent() {
-  const { currentUser, loading, activeChat } = useChat();
+  const { currentUser, loading, activeChat, activeCall, incomingCall, endCall } = useChat();
   const [view, setView] = React.useState<'chat' | 'settings' | 'feedback' | 'discover'>('chat');
+  const ringtoneRef = React.useRef<HTMLAudioElement | null>(null);
+  const callingRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if (incomingCall) {
+      ringtoneRef.current?.play().catch(() => {});
+    } else {
+      ringtoneRef.current?.pause();
+      if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+    }
+  }, [incomingCall]);
+
+  React.useEffect(() => {
+    if (activeCall?.status === 'ringing') {
+      callingRef.current?.play().catch(() => {});
+    } else {
+      callingRef.current?.pause();
+      if (callingRef.current) callingRef.current.currentTime = 0;
+    }
+  }, [activeCall?.status]);
 
   if (loading) {
     return (
@@ -126,6 +148,31 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <IncomingCallModal />
+      
+      {activeCall && (
+        <CallArea 
+          isOpen={true}
+          chatId={activeCall.chatId}
+          onClose={endCall}
+          callType={activeCall.type}
+          isGroup={false} // Signaling currently supports 1-to-1
+        />
+      )}
+
+      <audio 
+        ref={ringtoneRef}
+        src="https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3"
+        loop
+        className="hidden"
+      />
+      <audio 
+        ref={callingRef}
+        src="https://assets.mixkit.co/active_storage/sfx/1358/1358-preview.mp3"
+        loop
+        className="hidden"
+      />
     </div>
   );
 }

@@ -76,6 +76,18 @@ export interface Chat {
   duration?: number | null; // in minutes
 }
 
+export interface Call {
+  id: string;
+  callerId: string;
+  callerName: string;
+  callerPhoto: string | null;
+  receiverId: string;
+  chatId: string;
+  type: 'audio' | 'video';
+  status: 'ringing' | 'accepted' | 'rejected' | 'ended';
+  timestamp: Timestamp;
+}
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

@@ -32,7 +32,7 @@ import {
   deleteField
 } from 'firebase/firestore';
 import { auth, db, googleProvider, messaging } from './lib/firebase';
-import { User, Chat, Message, OperationType, FirestoreErrorInfo } from './types';
+import { User, Chat, Message, OperationType, FirestoreErrorInfo, Call } from './types';
 import { resizeImage } from './lib/imageUtils';
 
 interface ChatContextType {
@@ -77,6 +77,12 @@ interface ChatContextType {
   setNickname: (chatId: string, userId: string, nickname: string) => Promise<void>;
   reportChat: (chatId: string, reason: string) => Promise<void>;
   updateGroupMember: (chatId: string, userId: string, action: 'add' | 'remove' | 'make_admin' | 'make_moderator' | 'remove_admin' | 'remove_moderator') => Promise<void>;
+  activeCall: Call | null;
+  incomingCall: Call | null;
+  initiateCall: (chatId: string, receiverId: string, type: 'audio' | 'video') => Promise<void>;
+  acceptCall: () => Promise<void>;
+  rejectCall: () => Promise<void>;
+  endCall: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -120,6 +126,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [usersWithNotes, setUsersWithNotes] = useState<User[]>([]);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<Call | null>(null);
 
   // Handle FCM Token
   useEffect(() => {
@@ -1358,6 +1366,108 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  // Listen for incoming calls
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const q = query(
+      collection(db, 'calls'),
+      where('receiverId', '==', currentUser.uid),
+      where('status', '==', 'ringing'),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const callData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Call;
+        // Only set if it's a recent call (within 1 minute)
+        if (Date.now() - callData.timestamp.toMillis() < 60000) {
+          setIncomingCall(callData);
+        }
+      } else {
+        setIncomingCall(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Listen for active call status (for the caller)
+  useEffect(() => {
+    if (!activeCall || activeCall.callerId !== currentUser?.uid) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'calls', activeCall.id), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as Call;
+        if (data.status === 'rejected' || data.status === 'ended') {
+          setActiveCall(null);
+        } else if (data.status === 'accepted') {
+          setActiveCall({ ...activeCall, status: 'accepted' });
+        }
+      } else {
+        setActiveCall(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [activeCall?.id, currentUser?.uid]);
+
+  const initiateCall = async (chatId: string, receiverId: string, type: 'audio' | 'video') => {
+    if (!currentUser) return;
+
+    const callData: Omit<Call, 'id'> = {
+      callerId: currentUser.uid,
+      callerName: currentUser.displayName,
+      callerPhoto: currentUser.photoURL,
+      receiverId,
+      chatId,
+      type,
+      status: 'ringing',
+      timestamp: serverTimestamp() as Timestamp
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'calls'), callData);
+      setActiveCall({ id: docRef.id, ...callData } as Call);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'calls');
+    }
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'accepted' });
+      setActiveCall({ ...incomingCall, status: 'accepted' });
+      setIncomingCall(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `calls/${incomingCall.id}`);
+    }
+  };
+
+  const rejectCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'rejected' });
+      setIncomingCall(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `calls/${incomingCall.id}`);
+    }
+  };
+
+  const endCall = async () => {
+    const call = activeCall || incomingCall;
+    if (!call) return;
+    try {
+      await updateDoc(doc(db, 'calls', call.id), { status: 'ended' });
+      setActiveCall(null);
+      setIncomingCall(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `calls/${call.id}`);
+    }
+  };
+
   return (
     <ChatContext.Provider value={{ 
       currentUser, loading, chats, activeChat, setActiveChat, 
@@ -1365,7 +1475,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       startChat, createGroupChat, addReaction, addNoteReaction, deleteMessage, setTyping, updateUserProfile, updateEmailAddress,
       uploadFile, clearChat, deleteChat, deleteAccount, toggleArchive, toggleMute, 
       toggleBlock, toggleRestrict, markAsUnread, setNote, deleteNote, typingUser,
-      usersWithNotes, updateChatSettings, setNickname, reportChat, updateGroupMember
+      usersWithNotes, updateChatSettings, setNickname, reportChat, updateGroupMember,
+      activeCall, incomingCall, initiateCall, acceptCall, rejectCall, endCall
     }}>
       {children}
     </ChatContext.Provider>

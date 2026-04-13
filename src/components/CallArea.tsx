@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { useChat } from '../ChatProvider';
-import { X } from 'lucide-react';
+import { X, Phone, Video } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface CallAreaProps {
   isOpen: boolean;
@@ -12,15 +13,19 @@ interface CallAreaProps {
 }
 
 export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isGroup, callType }) => {
-  const { currentUser } = useChat();
+  const { currentUser, activeCall, allUsers } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [deviceError, setDeviceError] = React.useState<string | null>(null);
   const zpRef = useRef<any>(null);
   const isInitializing = useRef(false);
 
+  // Find receiver info for the calling screen
+  const receiver = allUsers.find(u => u.uid === activeCall?.receiverId);
+
   useEffect(() => {
-    if (!isOpen || !currentUser || !containerRef.current || isInitializing.current) return;
+    // Only join room if call is accepted
+    if (!isOpen || !currentUser || !containerRef.current || isInitializing.current || activeCall?.status !== 'accepted') return;
 
     const appID = Number(import.meta.env.VITE_ZEGOCLOUD_APP_ID);
     const serverSecret = import.meta.env.VITE_ZEGOCLOUD_SERVER_SECRET;
@@ -34,7 +39,6 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
       isInitializing.current = true;
       setDeviceError(null);
       
-      // Check for available devices to avoid NotFoundError
       let hasCamera = false;
       let hasMic = false;
       
@@ -72,11 +76,11 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
         showMyCameraToggleButton: isVideoCall && hasCamera,
         showMyMicrophoneToggleButton: hasMic,
         showAudioVideoSettingsButton: true,
-        showUserList: false, // Hide user list to feel less like a meeting
-        showLayoutButton: false, // Hide layout button
+        showUserList: false,
+        showLayoutButton: false,
         showNonVideoUser: true,
-        showTextChat: false, // Hide chat inside call
-        showPreJoinView: false, // Skip the "Join Room" preview screen
+        showTextChat: false,
+        showPreJoinView: false,
         turnOnCameraWhenJoining: isVideoCall && hasCamera,
         turnOnMicrophoneWhenJoining: hasMic,
         onLeaveRoom: () => {
@@ -98,7 +102,7 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
       }
       isInitializing.current = false;
     };
-  }, [chatId, currentUser, isGroup, onClose, isOpen, callType]);
+  }, [chatId, currentUser, isGroup, onClose, isOpen, callType, activeCall?.status]);
 
   if (!isOpen) return null;
 
@@ -106,7 +110,9 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
     <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col">
       <div className="p-4 flex items-center justify-between border-b border-white/10 bg-slate-900">
         <div className="flex flex-col">
-          <h2 className="text-lg font-bold text-white">Call in Progress</h2>
+          <h2 className="text-lg font-bold text-white">
+            {activeCall?.status === 'ringing' ? 'Calling...' : 'Call in Progress'}
+          </h2>
           {deviceError && (
             <p className="text-xs text-rose-500 font-medium animate-pulse">{deviceError}</p>
           )}
@@ -118,7 +124,49 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
           <X className="w-6 h-6" />
         </button>
       </div>
-      <div ref={containerRef} className="flex-1 w-full h-full" />
+      
+      <div className="flex-1 w-full h-full relative">
+        {activeCall?.status === 'ringing' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className="relative mb-8">
+                <div className="w-32 h-32 rounded-[3rem] overflow-hidden border-4 border-monbox-teal/20 p-1.5 relative z-10">
+                  <img 
+                    src={receiver?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeCall?.receiverId}`} 
+                    alt={receiver?.displayName}
+                    className="w-full h-full object-cover rounded-[2.5rem]"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="absolute inset-0 bg-monbox-teal/20 blur-3xl rounded-full animate-pulse" />
+                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-monbox-teal rounded-2xl flex items-center justify-center border-4 border-slate-950 z-20">
+                  {callType === 'video' ? (
+                    <Video className="w-6 h-6 text-white" />
+                  ) : (
+                    <Phone className="w-6 h-6 text-white" />
+                  )}
+                </div>
+              </div>
+
+              <h3 className="text-2xl font-bold text-white mb-2">{receiver?.displayName || 'User'}</h3>
+              <p className="text-sm font-medium text-monbox-teal animate-pulse tracking-widest uppercase">
+                Ringing...
+              </p>
+
+              <div className="mt-12 flex gap-8">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center animate-bounce">
+                  <Phone className="w-6 h-6 text-monbox-teal" />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        <div ref={containerRef} className="w-full h-full" />
+      </div>
     </div>
   );
 };

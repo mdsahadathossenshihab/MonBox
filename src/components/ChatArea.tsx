@@ -74,10 +74,9 @@ const THEMES = [
 ];
 
 export default function ChatArea() {
-  const { activeChat, currentUser, sendMessage, uploadFile, users, setActiveChat, deleteMessage, addReaction, messages, toggleBlock, toggleRestrict, updateChatSettings } = useChat();
+  const { activeChat, currentUser, sendMessage, uploadFile, users, setActiveChat, deleteMessage, addReaction, messages, toggleBlock, toggleRestrict, updateChatSettings, initiateCall } = useChat();
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -394,13 +393,19 @@ export default function ChatArea() {
             <Search className="w-4.5 h-4.5" />
           </button>
           <button 
-            onClick={() => setCallType('video')}
+            onClick={() => {
+              const otherId = activeChat.participants.find(id => id !== currentUser?.uid);
+              if (otherId) initiateCall(activeChat.id, otherId, 'video');
+            }}
             className="p-2 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-xl transition-all"
           >
             <Video className="w-4.5 h-4.5" />
           </button>
           <button 
-            onClick={() => setCallType('audio')}
+            onClick={() => {
+              const otherId = activeChat.participants.find(id => id !== currentUser?.uid);
+              if (otherId) initiateCall(activeChat.id, otherId, 'audio');
+            }}
             className="p-2 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-xl transition-all"
           >
             <Phone className="w-4.5 h-4.5" />
@@ -853,14 +858,6 @@ export default function ChatArea() {
           </div>
         </div>
       )}
-
-      <CallArea 
-        isOpen={!!callType} 
-        onClose={() => setCallType(null)} 
-        chatId={activeChat.id}
-        isGroup={activeChat.isGroup}
-        callType={callType || 'video'}
-      />
 
       <audio 
         ref={audioRef} 
