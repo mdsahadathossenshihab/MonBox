@@ -28,7 +28,12 @@ export interface Message {
   senderId: string;
   text?: string;
   timestamp: Timestamp;
-  type: 'text' | 'image' | 'voice';
+  type: 'text' | 'image' | 'voice' | 'call';
+  callInfo?: {
+    type: 'audio' | 'video';
+    duration?: number; // in seconds
+    status: 'missed' | 'completed' | 'declined';
+  };
   reactions?: Record<string, string>;
   status: 'sending' | 'sent' | 'delivered' | 'seen';
   seenBy?: string[];
@@ -86,6 +91,9 @@ export interface Call {
   type: 'audio' | 'video';
   status: 'ringing' | 'accepted' | 'rejected' | 'ended';
   timestamp: Timestamp;
+  acceptedAt?: Timestamp | null;
+  endedAt?: Timestamp | null;
+  callMessageId?: string;
 }
 
 export enum OperationType {

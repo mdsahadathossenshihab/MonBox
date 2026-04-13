@@ -1399,11 +1399,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const unsubscribe = onSnapshot(doc(db, 'calls', activeCall.id), (snap) => {
       if (snap.exists()) {
-        const data = snap.data() as Call;
+        const data = { id: snap.id, ...snap.data() } as Call;
         if (data.status === 'rejected' || data.status === 'ended') {
+          // If the call ended or was rejected, update the message
+          if (data.callMessageId) {
+            let status: 'missed' | 'completed' | 'declined' = 'completed';
+            let duration = 0;
+            
+            if (data.status === 'rejected') {
+              status = 'declined';
+            } else if (!data.acceptedAt) {
+              status = 'missed';
+            } else if (data.endedAt && data.acceptedAt) {
+              status = 'completed';
+              duration = Math.floor((data.endedAt.toMillis() - data.acceptedAt.toMillis()) / 1000);
+            }
+
+            updateDoc(doc(db, 'chats', data.chatId, 'messages', data.callMessageId), {
+              'callInfo.status': status,
+              'callInfo.duration': duration,
+              'status': 'sent'
+            }).catch(e => console.error('Error updating call log message:', e));
+          }
           setActiveCall(null);
         } else if (data.status === 'accepted') {
-          setActiveCall({ ...activeCall, status: 'accepted' });
+          setActiveCall(data);
         }
       } else {
         setActiveCall(null);
@@ -1416,20 +1436,46 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const initiateCall = async (chatId: string, receiverId: string, type: 'audio' | 'video') => {
     if (!currentUser) return;
 
-    const callData: Omit<Call, 'id'> = {
-      callerId: currentUser.uid,
-      callerName: currentUser.displayName,
-      callerPhoto: currentUser.photoURL,
-      receiverId,
-      chatId,
-      type,
-      status: 'ringing',
-      timestamp: serverTimestamp() as Timestamp
-    };
-
     try {
+      // 1. Create the call log message first
+      const messageData: Omit<Message, 'id'> = {
+        senderId: currentUser.uid,
+        timestamp: serverTimestamp() as Timestamp,
+        type: 'call',
+        callInfo: {
+          type,
+          status: 'missed', // Default until accepted/completed
+          duration: 0
+        },
+        status: 'sending'
+      };
+      const msgRef = await addDoc(collection(db, 'chats', chatId, 'messages'), messageData);
+
+      // 2. Create the call signaling doc
+      const callData: Omit<Call, 'id'> = {
+        callerId: currentUser.uid,
+        callerName: currentUser.displayName,
+        callerPhoto: currentUser.photoURL,
+        receiverId,
+        chatId,
+        type,
+        status: 'ringing',
+        timestamp: serverTimestamp() as Timestamp,
+        callMessageId: msgRef.id
+      };
+
       const docRef = await addDoc(collection(db, 'calls'), callData);
       setActiveCall({ id: docRef.id, ...callData } as Call);
+
+      // Update chat's last message
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessage: {
+          text: `📞 ${type === 'video' ? 'Video' : 'Audio'} Call`,
+          senderId: currentUser.uid,
+          timestamp: serverTimestamp()
+        },
+        updatedAt: serverTimestamp()
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'calls');
     }
@@ -1438,7 +1484,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const acceptCall = async () => {
     if (!incomingCall) return;
     try {
-      await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'accepted' });
+      const now = serverTimestamp();
+      await updateDoc(doc(db, 'calls', incomingCall.id), { 
+        status: 'accepted',
+        acceptedAt: now
+      });
       setActiveCall({ ...incomingCall, status: 'accepted' });
       setIncomingCall(null);
     } catch (error) {
@@ -1450,6 +1500,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!incomingCall) return;
     try {
       await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'rejected' });
+      
+      // Also try to update the message if possible (caller's listener usually handles this, but as backup)
+      if (incomingCall.callMessageId) {
+        updateDoc(doc(db, 'chats', incomingCall.chatId, 'messages', incomingCall.callMessageId), {
+          'callInfo.status': 'declined',
+          'status': 'sent'
+        }).catch(() => {});
+      }
+      
       setIncomingCall(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `calls/${incomingCall.id}`);
@@ -1460,7 +1519,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const call = activeCall || incomingCall;
     if (!call) return;
     try {
-      await updateDoc(doc(db, 'calls', call.id), { status: 'ended' });
+      const now = Timestamp.now();
+      await updateDoc(doc(db, 'calls', call.id), { 
+        status: 'ended',
+        endedAt: now
+      });
+
+      // Update message with duration if it was accepted
+      if (call.callMessageId) {
+        let status: 'missed' | 'completed' | 'declined' = 'completed';
+        let duration = 0;
+        
+        if (call.status === 'rejected') {
+          status = 'declined';
+        } else if (!call.acceptedAt) {
+          status = 'missed';
+        } else {
+          status = 'completed';
+          const start = call.acceptedAt.toMillis();
+          duration = Math.floor((now.toMillis() - start) / 1000);
+        }
+
+        updateDoc(doc(db, 'chats', call.chatId, 'messages', call.callMessageId), {
+          'callInfo.status': status,
+          'callInfo.duration': duration,
+          'status': 'sent'
+        }).catch(() => {});
+      }
+
       setActiveCall(null);
       setIncomingCall(null);
     } catch (error) {

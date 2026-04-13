@@ -513,7 +513,42 @@ export default function ChatArea() {
                     </div>
                   )}
                   
-                  <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
+                  {message.type === 'call' && message.callInfo && (
+                    <div className="flex flex-col items-center gap-3 py-2">
+                      <div className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                        message.callInfo.status === 'missed' ? "bg-rose-500/20 text-rose-500" : "bg-monbox-teal/20 text-monbox-teal"
+                      )}>
+                        {message.callInfo.type === 'video' ? <Video className="w-6 h-6" /> : <Phone className="w-6 h-6" />}
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-bold">
+                          {message.callInfo.type === 'video' ? 'Video' : 'Audio'} Call
+                        </p>
+                        <p className={cn(
+                          "text-[10px] font-black uppercase tracking-widest opacity-60",
+                          message.callInfo.status === 'missed' && "text-rose-400"
+                        )}>
+                          {message.callInfo.status === 'missed' ? 'Missed' : 
+                           message.callInfo.status === 'declined' ? 'Declined' : 
+                           `Completed • ${Math.floor(message.callInfo.duration! / 60)}m ${message.callInfo.duration! % 60}s`}
+                        </p>
+                      </div>
+                      {message.callInfo.status === 'missed' && !isMe && (
+                        <button 
+                          onClick={() => {
+                            const otherId = activeChat.participants.find(id => id !== currentUser?.uid);
+                            if (otherId) initiateCall(activeChat.id, otherId, message.callInfo!.type);
+                          }}
+                          className="mt-2 px-6 py-2 bg-monbox-teal text-white text-[10px] font-bold uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-lg shadow-monbox-teal/20"
+                        >
+                          Call Back
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {message.text && <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>}
                   
                   <div className={cn(
                     "flex items-center gap-2 mt-3",
