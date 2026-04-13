@@ -129,7 +129,7 @@ export default function ChatArea() {
               <Sparkles className="w-5 h-5 text-white" />
             </div>
           </div>
-          <h2 className="text-4xl font-bold text-white mb-4 tracking-tighter font-display">Welcome to Pakhi</h2>
+          <h2 className="text-4xl font-bold text-white mb-4 tracking-tighter font-display">Welcome to MonBox</h2>
           <p className="text-slate-500 max-w-xs mx-auto font-bold text-[10px] uppercase tracking-[0.4em]">Select a conversation to begin your secure experience</p>
         </motion.div>
       </div>
