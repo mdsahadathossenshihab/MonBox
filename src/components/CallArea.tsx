@@ -15,9 +15,11 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [deviceError, setDeviceError] = React.useState<string | null>(null);
+  const zpRef = useRef<any>(null);
+  const isInitializing = useRef(false);
 
   useEffect(() => {
-    if (!isOpen || !currentUser || !containerRef.current) return;
+    if (!isOpen || !currentUser || !containerRef.current || isInitializing.current) return;
 
     const appID = Number(import.meta.env.VITE_ZEGOCLOUD_APP_ID);
     const serverSecret = import.meta.env.VITE_ZEGOCLOUD_SERVER_SECRET;
@@ -28,6 +30,7 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
     }
 
     const myMeeting = async () => {
+      isInitializing.current = true;
       setDeviceError(null);
       
       // Check for available devices to avoid NotFoundError
@@ -41,8 +44,6 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
         
         if (!hasCamera && !hasMic) {
           setDeviceError('No camera or microphone found. Please connect your hardware and try again.');
-          // We don't return here, we let Zego try to join in "listener" mode if possible, 
-          // but we will inform the user.
         }
       } catch (e) {
         console.warn('Could not enumerate devices:', e);
@@ -57,14 +58,10 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
       );
 
       const zp = ZegoUIKitPrebuilt.create(kitToken);
+      zpRef.current = zp;
+
       zp.joinRoom({
         container: containerRef.current,
-        sharedLinks: [
-          {
-            name: 'Personal link',
-            url: window.location.protocol + '//' + window.location.host + window.location.pathname + '?roomID=' + chatId,
-          },
-        ],
         scenario: {
           mode: isGroup ? ZegoUIKitPrebuilt.GroupCall : ZegoUIKitPrebuilt.OneONoneCall,
         },
@@ -72,6 +69,11 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
         showMyCameraToggleButton: hasCamera,
         showMyMicrophoneToggleButton: hasMic,
         showAudioVideoSettingsButton: true,
+        showUserList: false, // Hide user list to feel less like a meeting
+        showLayoutButton: false, // Hide layout button
+        showNonVideoUser: true,
+        showTextChat: false, // Hide chat inside call
+        showPreJoinView: false, // Skip the "Join Room" preview screen
         turnOnCameraWhenJoining: hasCamera,
         turnOnMicrophoneWhenJoining: hasMic,
         onLeaveRoom: () => {
@@ -83,9 +85,17 @@ export const CallArea: React.FC<CallAreaProps> = ({ isOpen, chatId, onClose, isG
     myMeeting();
 
     return () => {
-      // Cleanup if needed
+      if (zpRef.current) {
+        try {
+          zpRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying Zego instance:', e);
+        }
+        zpRef.current = null;
+      }
+      isInitializing.current = false;
     };
-  }, [chatId, currentUser, isGroup, onClose]);
+  }, [chatId, currentUser, isGroup, onClose, isOpen]);
 
   if (!isOpen) return null;
 
