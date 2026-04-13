@@ -149,8 +149,8 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow get: if isAuthenticated() && (resource == null || (request.auth.uid in resource.data.participants && (!('expiresAt' in resource.data) || resource.data.expiresAt == null || request.time < resource.data.expiresAt)));
-      allow list: if isAuthenticated() && (resource.data.participants.hasAny([request.auth.uid]) && (!('expiresAt' in resource.data) || resource.data.expiresAt == null || request.time < resource.data.expiresAt));
+      allow get: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants);
+      allow list: if isAuthenticated() && resource.data.participants.hasAny([request.auth.uid]);
       allow create: if isAuthenticated() && isParticipantInRequest() && isValidChat(request.resource.data);
       allow update: if isAuthenticated() && isParticipantInResource() && isValidChat(request.resource.data);
       allow delete: if isAuthenticated() && (request.auth.uid in resource.data.participants || request.auth.uid == resource.data.createdBy);

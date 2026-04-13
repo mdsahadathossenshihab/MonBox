@@ -31,6 +31,7 @@ export interface Message {
   type: 'text' | 'image' | 'voice';
   reactions?: Record<string, string>;
   status: 'sending' | 'sent' | 'delivered' | 'seen';
+  seenBy?: string[];
   fileUrl?: string;
   scheduledFor?: Timestamp | null;
   isDeleted?: boolean;
@@ -69,6 +70,8 @@ export interface Chat {
   name?: string;
   groupPhoto?: string | null;
   createdBy?: string;
+  admins?: string[];
+  moderators?: string[];
   expiresAt?: Timestamp | null;
   duration?: number | null; // in minutes
 }

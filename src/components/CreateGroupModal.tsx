@@ -35,9 +35,11 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
   };
 
   const toggleParticipant = (uid: string) => {
-    setSelectedParticipants(prev => 
-      prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
-    );
+    setSelectedParticipants(prev => {
+      if (prev.includes(uid)) return prev.filter(id => id !== uid);
+      if (prev.length >= 19) return prev; // 19 + creator = 20
+      return [...prev, uid];
+    });
   };
 
   return (
@@ -82,15 +84,23 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
                 onChange={(e) => setGroupDuration(Number(e.target.value))}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all mt-1.5 appearance-none"
               >
-                <option value={0}>No Auto-Delete</option>
+                <option value={0}>Lifetime (No Auto-Delete)</option>
+                <option value={1}>1 Minute</option>
+                <option value={2}>2 Minutes</option>
+                <option value={3}>3 Minutes</option>
+                <option value={4}>4 Minutes</option>
                 <option value={5}>5 Minutes</option>
+                <option value={10}>10 Minutes</option>
+                <option value={30}>30 Minutes</option>
                 <option value={60}>1 Hour</option>
                 <option value={1440}>1 Day</option>
               </select>
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Select Participants ({selectedParticipants.length})</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                Select Participants ({selectedParticipants.length}/19)
+              </label>
               <div className="max-h-48 overflow-y-auto custom-scrollbar mt-2 space-y-1 pr-2">
                 {allUsers.filter(u => u.uid !== currentUser?.uid).map(user => (
                   <button

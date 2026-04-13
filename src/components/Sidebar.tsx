@@ -164,7 +164,7 @@ export default function Sidebar({ className, onOpenSettings, onOpenFeedback, onO
               const otherUserId = chat.participants.find(id => id !== currentUser?.uid);
               const nickname = otherUserId ? chat.nicknames?.[otherUserId] : null;
               const details = chat.isGroup 
-                ? { displayName: chat.name, photoURL: `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}` }
+                ? { displayName: chat.name, photoURL: chat.groupPhoto || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}` }
                 : chat.participantDetails?.[otherUserId!];
               
               if (!details) return null;
@@ -193,7 +193,7 @@ export default function Sidebar({ className, onOpenSettings, onOpenFeedback, onO
                 >
                   <div className="relative flex-shrink-0">
                     <img 
-                      src={details.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${chat.id}`} 
+                      src={details.photoURL} 
                       className={cn("w-14 h-14 rounded-[1.5rem] object-cover border-2 transition-all", isSelected ? "border-white/30 scale-105" : "border-white/5")} 
                     />
                     {!chat.isGroup && users.find(u => u.uid === otherUserId)?.isOnline && !isOtherRestrictedMe && (
@@ -220,8 +220,8 @@ export default function Sidebar({ className, onOpenSettings, onOpenFeedback, onO
                         {isMuted && <VolumeX className={cn("w-3 h-3", isSelected ? "text-white/40" : "text-slate-600")} />}
                         {unreadCount > 0 && (
                           <div className={cn(
-                            "min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center text-[9px] font-black",
-                            isSelected ? "bg-white text-monbox-teal" : "bg-monbox-teal text-white"
+                            "min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center text-[9px] font-black animate-in zoom-in duration-300",
+                            isSelected ? "bg-white text-monbox-teal" : "bg-rose-500 text-white shadow-lg shadow-rose-500/40"
                           )}>
                             {unreadCount}
                           </div>

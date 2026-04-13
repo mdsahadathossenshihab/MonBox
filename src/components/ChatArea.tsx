@@ -3,7 +3,7 @@ import { useChat } from '../ChatProvider';
 import { Send, Image as ImageIcon, Smile, MoreVertical, Phone, Video, Paperclip, Mic, X, ArrowLeft, Shield, Check, CheckCheck, Play, Pause, Download, Trash2, Heart, MessageSquare, Sparkles, ShieldAlert, Ban, Clock, Info, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Message, Chat } from '../types';
 import { cn } from '../lib/utils';
 import { CallArea } from './CallArea';
@@ -144,7 +144,7 @@ export default function ChatArea() {
   // They can only be messaged after unrestricting from Settings.
   
   const details = activeChat.isGroup 
-    ? { displayName: activeChat.name, photoURL: `https://api.dicebear.com/7.x/identicon/svg?seed=${activeChat.id}` }
+    ? { displayName: activeChat.name, photoURL: activeChat.groupPhoto || `https://api.dicebear.com/7.x/identicon/svg?seed=${activeChat.id}` }
     : activeChat.participantDetails?.[otherUserId!];
 
   if (!details) return null;
@@ -331,7 +331,7 @@ export default function ChatArea() {
           </button>
           <div className="relative group cursor-pointer" onClick={() => setShowChatInfo(true)}>
             <img 
-              src={details.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeChat.id}`} 
+              src={details.photoURL} 
               className="w-10 h-10 rounded-xl object-cover border border-white/10 shadow-2xl group-hover:scale-105 transition-transform"
             />
             {!activeChat.isGroup && users.find(u => u.uid === otherUserId)?.isOnline && (
@@ -347,8 +347,20 @@ export default function ChatArea() {
                 "w-1 h-1 rounded-full", 
                 (activeChat.isGroup || (users.find(u => u.uid === otherUserId)?.isOnline && !isOtherRestrictedMe)) ? "bg-emerald-500 animate-pulse" : "bg-slate-600"
               )} />
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.1em]">
-                {activeChat.isGroup ? `${activeChat.participants.length} Members` : ((users.find(u => u.uid === otherUserId)?.isOnline && !isOtherRestrictedMe) ? 'Online' : 'Offline')}
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.1em] flex items-center gap-2">
+                {activeChat.isGroup ? (
+                  <>
+                    <span>{activeChat.participants.length} Members</span>
+                    {activeChat.expiresAt && (
+                      <span className="text-rose-500 flex items-center gap-1">
+                        <Clock className="w-2 h-2" />
+                        Expires {formatDistanceToNow(activeChat.expiresAt.toDate(), { addSuffix: true })}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  (users.find(u => u.uid === otherUserId)?.isOnline && !isOtherRestrictedMe) ? 'Online' : 'Offline'
+                )}
               </p>
             </div>
           </div>
@@ -509,11 +521,32 @@ export default function ChatArea() {
                     {isMe && (
                       <div className="flex items-center gap-1">
                         {message.status === 'seen' ? (
-                          <img 
-                            src={details.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
-                            className="w-3 h-3 rounded-full border border-white/20" 
-                            alt="seen"
-                          />
+                          <div className="flex -space-x-1.5">
+                            {activeChat.isGroup && message.seenBy ? (
+                              message.seenBy
+                                .filter(uid => uid !== currentUser?.uid)
+                                .slice(0, 3)
+                                .map(uid => (
+                                  <img 
+                                    key={uid}
+                                    src={activeChat.participantDetails?.[uid]?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`} 
+                                    className="w-3 h-3 rounded-full border border-slate-900" 
+                                    alt="seen"
+                                  />
+                                ))
+                            ) : (
+                              <img 
+                                src={details.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
+                                className="w-3 h-3 rounded-full border border-white/20" 
+                                alt="seen"
+                              />
+                            )}
+                            {activeChat.isGroup && message.seenBy && message.seenBy.filter(uid => uid !== currentUser?.uid).length > 3 && (
+                              <div className="w-3 h-3 rounded-full bg-slate-800 border border-slate-900 flex items-center justify-center">
+                                <span className="text-[5px] font-bold text-white">+{message.seenBy.filter(uid => uid !== currentUser?.uid).length - 3}</span>
+                              </div>
+                            )}
+                          </div>
                         ) : message.status === 'delivered' ? (
                           <div className="flex -space-x-1">
                             <Check className="w-3 h-3 text-monbox-teal" />
@@ -693,20 +726,20 @@ export default function ChatArea() {
             )}
           </AnimatePresence>
 
-          <div className="bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[3rem] p-3 pr-4 shadow-2xl flex items-center gap-3 group focus-within:border-monbox-teal/50 transition-all teal-glow relative overflow-hidden">
+          <div className="bg-white/[0.03] backdrop-blur-3xl border border-white/10 rounded-[2.5rem] md:rounded-[3rem] p-2 md:p-3 pr-3 md:pr-4 shadow-2xl flex items-center gap-1 md:gap-3 group focus-within:border-monbox-teal/50 transition-all teal-glow relative overflow-hidden">
             {isRecording && (
               <motion.div 
                 initial={{ x: '100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
-                className="absolute inset-0 bg-slate-900 z-30 flex items-center justify-between px-6"
+                className="absolute inset-0 bg-slate-900 z-30 flex items-center justify-between px-4 md:px-6"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-3 h-3 bg-rose-500 rounded-full animate-pulse" />
-                  <span className="text-white font-bold font-mono">{formatDuration(recordingDuration)}</span>
-                  <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Recording Voice...</span>
+                <div className="flex items-center gap-2 md:gap-4">
+                  <div className="w-2 h-2 md:w-3 md:h-3 bg-rose-500 rounded-full animate-pulse" />
+                  <span className="text-white font-bold font-mono text-xs md:text-sm">{formatDuration(recordingDuration)}</span>
+                  <span className="text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-widest animate-pulse hidden sm:inline">Recording...</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 md:gap-2">
                   <button 
                     onClick={() => {
                       if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
@@ -714,15 +747,15 @@ export default function ChatArea() {
                       if (timerRef.current) clearInterval(timerRef.current);
                       audioChunksRef.current = [];
                     }}
-                    className="px-4 py-2 text-rose-500 hover:bg-rose-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    className="px-3 md:px-4 py-2 text-rose-500 hover:bg-rose-500/10 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={stopRecording}
-                    className="bg-monbox-teal text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-monbox-teal/20 hover:bg-monbox-teal-light transition-all"
+                    className="bg-monbox-teal text-white px-4 md:px-6 py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest shadow-lg shadow-monbox-teal/20 hover:bg-monbox-teal-light transition-all"
                   >
-                    Send Voice
+                    Send
                   </button>
                 </div>
               </motion.div>
@@ -731,27 +764,27 @@ export default function ChatArea() {
             <div className="flex items-center">
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="p-4 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-full transition-all"
+                className="p-2 md:p-4 text-slate-500 hover:text-monbox-teal hover:bg-white/5 rounded-full transition-all"
               >
-                <ImageIcon className="w-7 h-7" />
+                <ImageIcon className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               <button 
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 className={cn(
-                  "p-4 rounded-full transition-all",
+                  "p-2 md:p-4 rounded-full transition-all",
                   showEmojiPicker ? "text-monbox-teal bg-monbox-teal/10" : "text-slate-500 hover:text-monbox-teal hover:bg-white/5"
                 )}
               >
-                <Smile className="w-7 h-7" />
+                <Smile className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               <button 
                 onClick={isRecording ? stopRecording : startRecording}
                 className={cn(
-                  "p-4 rounded-full transition-all",
+                  "p-2 md:p-4 rounded-full transition-all",
                   isRecording ? "bg-rose-500 text-white animate-pulse" : "text-slate-500 hover:text-monbox-teal hover:bg-white/5"
                 )}
               >
-                <Mic className="w-7 h-7" />
+                <Mic className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
             </div>
@@ -761,26 +794,26 @@ export default function ChatArea() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : "Compose secure message..."}
+              placeholder={isRecording ? `Recording...` : "Message..."}
               disabled={isRecording}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-700 text-sm font-medium py-4"
+              className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-700 text-xs md:text-sm font-medium py-3 md:py-4"
             />
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 md:gap-3">
               <div className="relative">
                 <button 
                   onClick={() => setShowSchedulePicker(!showSchedulePicker)}
                   className={cn(
-                    "p-4 rounded-full transition-all",
+                    "p-2 md:p-4 rounded-full transition-all",
                     scheduledTime ? "text-monbox-teal bg-monbox-teal/10" : "text-slate-500 hover:text-monbox-teal hover:bg-white/5"
                   )}
                   title="Schedule Message"
                 >
-                  <Clock className="w-7 h-7" />
+                  <Clock className="w-5 h-5 md:w-7 md:h-7" />
                 </button>
                 {scheduledTime && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-monbox-teal rounded-full flex items-center justify-center animate-bounce">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  <div className="absolute top-1 right-1 w-2.5 h-2.5 md:w-4 md:h-4 bg-monbox-teal rounded-full flex items-center justify-center animate-bounce">
+                    <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-white rounded-full" />
                   </div>
                 )}
               </div>
@@ -788,13 +821,13 @@ export default function ChatArea() {
               <button 
                 onClick={() => (inputText.trim() || selectedFile) ? handleSend() : sendMessage(activeChat.quickEmoji || '👍', 'text')}
                 className={cn(
-                  "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90",
+                  "w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90",
                   (inputText.trim() || selectedFile) ? "bg-monbox-teal text-white shadow-monbox-teal/40 hover:bg-monbox-teal-light" : "bg-white/5 text-monbox-teal"
                 )}
               >
                 {(inputText.trim() || selectedFile) ? (
-                  scheduledTime ? <Clock className="w-6 h-6" /> : <Send className="w-6 h-6" />
-                ) : <span className="text-2xl">{activeChat.quickEmoji || '👍'}</span>}
+                  scheduledTime ? <Clock className="w-5 h-5 md:w-6 md:h-6" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />
+                ) : <span className="text-xl md:text-2xl">{activeChat.quickEmoji || '👍'}</span>}
               </button>
             </div>
           </div>

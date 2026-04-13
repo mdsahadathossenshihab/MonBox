@@ -31,20 +31,30 @@ const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮', '😢', '🙏', 
 export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
   const { 
     currentUser, toggleMute, toggleBlock, toggleRestrict, 
-    deleteChat, updateChatSettings, setNickname, reportChat, uploadFile
+    deleteChat, updateChatSettings, setNickname, reportChat, uploadFile,
+    updateGroupMember, allUsers
   } = useChat();
-  const [view, setView] = useState<'main' | 'theme' | 'nickname' | 'report' | 'emoji'>('main');
+  const [view, setView] = useState<'main' | 'theme' | 'nickname' | 'report' | 'emoji' | 'members' | 'group_settings' | 'add_member'>('main');
   const [editingNickname, setEditingNickname] = useState<string | null>(null);
   const [nicknameValue, setNicknameValue] = useState('');
   const [reportReason, setReportReason] = useState('');
   const [isUploadingBg, setIsUploadingBg] = useState(false);
+  const [isUploadingGroupPhoto, setIsUploadingGroupPhoto] = useState(false);
+  const [groupName, setGroupName] = useState(chat.name || '');
   const bgInputRef = React.useRef<HTMLInputElement>(null);
+  const groupPhotoInputRef = React.useRef<HTMLInputElement>(null);
 
   const otherUserId = chat.participants.find(id => id !== currentUser?.uid);
-  const details = chat.participantDetails?.[otherUserId!];
+  const details = chat.isGroup 
+    ? { displayName: chat.name, photoURL: chat.groupPhoto || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}` }
+    : chat.participantDetails?.[otherUserId!];
+  
   const isMuted = chat.mutedBy?.includes(currentUser?.uid || '');
   const isBlocked = chat.blockedBy?.includes(currentUser?.uid || '');
   const isRestricted = chat.restrictedBy?.includes(currentUser?.uid || '');
+
+  const isAdmin = chat.isGroup && (chat.admins?.includes(currentUser?.uid || '') || chat.createdBy === currentUser?.uid);
+  const isModerator = chat.isGroup && chat.moderators?.includes(currentUser?.uid || '');
 
   const handleSetNickname = async () => {
     if (editingNickname) {
@@ -86,7 +96,7 @@ export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
       <div className="flex flex-col items-center text-center pt-4">
         <div className="relative mb-4">
           <img 
-            src={details?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
+            src={details?.photoURL} 
             className="w-24 h-24 rounded-[2.5rem] object-cover border-4 border-white/5 shadow-2xl teal-glow"
           />
           <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-monbox-teal rounded-full border-4 border-slate-950 flex items-center justify-center">
@@ -100,7 +110,7 @@ export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <QuickAction icon={<Search className="w-5 h-5" />} label="Search" onClick={onSearch} />
         <QuickAction 
           icon={isMuted ? <BellOff className="w-5 h-5" /> : <Bell className="w-5 h-5" />} 
@@ -108,17 +118,35 @@ export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
           onClick={() => toggleMute(chat.id)} 
           active={isMuted}
         />
-        <QuickAction icon={<UserCircle className="w-5 h-5" />} label="Profile" onClick={() => {}} />
         <QuickAction icon={<Palette className="w-5 h-5" />} label="Theme" onClick={() => setView('theme')} />
       </div>
 
       {/* Options List */}
       <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-[2rem] p-2">
-        <OptionItem 
-          icon={<Edit3 className="w-4 h-4" />} 
-          title="Nicknames" 
-          onClick={() => setView('nickname')} 
-        />
+        {chat.isGroup && (
+          <>
+            <OptionItem 
+              icon={<Users className="w-4 h-4" />} 
+              title="Group Members" 
+              onClick={() => setView('members')} 
+              trailing={<span className="text-[10px] font-bold text-slate-500">{chat.participants.length}</span>}
+            />
+            {isAdmin && (
+              <OptionItem 
+                icon={<Edit3 className="w-4 h-4" />} 
+                title="Group Settings" 
+                onClick={() => setView('group_settings')} 
+              />
+            )}
+          </>
+        )}
+        {!chat.isGroup && (
+          <OptionItem 
+            icon={<Edit3 className="w-4 h-4" />} 
+            title="Nicknames" 
+            onClick={() => setView('nickname')} 
+          />
+        )}
         <OptionItem 
           icon={<Smile className="w-4 h-4" />} 
           title="Quick Emoji" 
@@ -338,6 +366,172 @@ export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
     </div>
   );
 
+  const renderMembers = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setView('main')} className="p-2 hover:bg-white/5 rounded-xl"><X className="w-5 h-5" /></button>
+          <h3 className="text-sm font-bold text-white">Group Members ({chat.participants.length}/20)</h3>
+        </div>
+        {(isAdmin || isModerator) && chat.participants.length < 20 && (
+          <button 
+            onClick={() => setView('add_member')}
+            className="p-2 bg-monbox-teal/10 text-monbox-teal rounded-xl hover:bg-monbox-teal/20 transition-all"
+          >
+            <Users className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+      
+      <div className="space-y-2">
+        {chat.participants.map(uid => {
+          const user = allUsers.find(u => u.uid === uid);
+          const userIsAdmin = chat.admins?.includes(uid) || chat.createdBy === uid;
+          const userIsModerator = chat.moderators?.includes(uid);
+          const isMe = uid === currentUser?.uid;
+
+          return (
+            <div key={uid} className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`} className="w-10 h-10 rounded-xl" />
+                <div>
+                  <p className="text-xs font-bold text-white">{user?.displayName} {isMe && '(You)'}</p>
+                  <div className="flex gap-1 mt-0.5">
+                    {userIsAdmin && <span className="text-[6px] font-black bg-monbox-teal/20 text-monbox-teal px-1.5 py-0.5 rounded uppercase tracking-widest">Admin</span>}
+                    {userIsModerator && <span className="text-[6px] font-black bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase tracking-widest">Moderator</span>}
+                  </div>
+                </div>
+              </div>
+
+              {isAdmin && !isMe && (
+                <div className="flex gap-1">
+                  {!userIsAdmin && (
+                    <button 
+                      onClick={() => updateGroupMember(chat.id, uid, userIsModerator ? 'remove_moderator' : 'make_moderator')}
+                      className={cn(
+                        "p-2 rounded-lg transition-all",
+                        userIsModerator ? "bg-amber-500/10 text-amber-500" : "bg-white/5 text-slate-500 hover:text-amber-500"
+                      )}
+                      title={userIsModerator ? "Remove Moderator" : "Make Moderator"}
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => updateGroupMember(chat.id, uid, 'remove')}
+                    className="p-2 bg-white/5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                    title="Remove from Group"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              {isModerator && !isAdmin && !isMe && !userIsAdmin && !userIsModerator && (
+                <button 
+                  onClick={() => updateGroupMember(chat.id, uid, 'remove')}
+                  className="p-2 bg-white/5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderAddMember = () => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => setView('members')} className="p-2 hover:bg-white/5 rounded-xl"><X className="w-5 h-5" /></button>
+        <h3 className="text-sm font-bold text-white">Add Member</h3>
+      </div>
+      
+      <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+        {allUsers.filter(u => !chat.participants.includes(u.uid)).map(user => (
+          <button 
+            key={user.uid}
+            onClick={() => {
+              updateGroupMember(chat.id, user.uid, 'add');
+              setView('members');
+            }}
+            className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex items-center gap-3 hover:bg-white/5 transition-all"
+          >
+            <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} className="w-10 h-10 rounded-xl" />
+            <div className="text-left">
+              <p className="text-xs font-bold text-white">{user.displayName}</p>
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Available</p>
+            </div>
+          </button>
+        ))}
+        {allUsers.filter(u => !chat.participants.includes(u.uid)).length === 0 && (
+          <p className="text-center text-slate-500 text-[10px] font-bold py-10">No more users to add</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderGroupSettings = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => setView('main')} className="p-2 hover:bg-white/5 rounded-xl"><X className="w-5 h-5" /></button>
+        <h3 className="text-sm font-bold text-white">Group Settings</h3>
+      </div>
+
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative group">
+          <img 
+            src={chat.groupPhoto || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} 
+            className="w-24 h-24 rounded-[2.5rem] object-cover border-4 border-white/5 shadow-2xl"
+          />
+          <button 
+            onClick={() => groupPhotoInputRef.current?.click()}
+            className="absolute inset-0 bg-black/40 rounded-[2.5rem] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Camera className="w-6 h-6 text-white" />
+          </button>
+          <input 
+            type="file" 
+            ref={groupPhotoInputRef} 
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setIsUploadingGroupPhoto(true);
+              try {
+                const base64 = await uploadFile(file, `groups/${chat.id}/photo`);
+                await updateChatSettings(chat.id, { groupPhoto: base64 });
+              } finally {
+                setIsUploadingGroupPhoto(false);
+              }
+            }} 
+            className="hidden" 
+            accept="image/*"
+          />
+        </div>
+        
+        <div className="w-full space-y-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Group Name</label>
+          <div className="flex gap-2">
+            <input 
+              type="text"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-monbox-teal"
+              placeholder="Enter group name..."
+            />
+            <button 
+              onClick={() => updateChatSettings(chat.id, { name: groupName })}
+              className="px-4 bg-monbox-teal text-white font-bold rounded-xl hover:bg-monbox-teal-light transition-all"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <motion.div 
       initial={{ x: '100%' }}
@@ -360,6 +554,9 @@ export function ChatInfo({ chat, onClose, onSearch }: ChatInfoProps) {
           {view === 'nickname' && <motion.div key="nickname" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderNickname()}</motion.div>}
           {view === 'emoji' && <motion.div key="emoji" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderEmoji()}</motion.div>}
           {view === 'report' && <motion.div key="report" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderReport()}</motion.div>}
+          {view === 'members' && <motion.div key="members" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderMembers()}</motion.div>}
+          {view === 'add_member' && <motion.div key="add_member" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderAddMember()}</motion.div>}
+          {view === 'group_settings' && <motion.div key="group_settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>{renderGroupSettings()}</motion.div>}
         </AnimatePresence>
       </div>
     </motion.div>

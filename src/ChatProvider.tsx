@@ -10,6 +10,7 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail
 } from 'firebase/auth';
+import { getToken, onMessage } from 'firebase/messaging';
 import { 
   doc, 
   setDoc, 
@@ -30,7 +31,7 @@ import {
   arrayRemove,
   deleteField
 } from 'firebase/firestore';
-import { auth, db, googleProvider } from './lib/firebase';
+import { auth, db, googleProvider, messaging } from './lib/firebase';
 import { User, Chat, Message, OperationType, FirestoreErrorInfo } from './types';
 import { resizeImage } from './lib/imageUtils';
 
@@ -72,6 +73,10 @@ interface ChatContextType {
   deleteNote: () => Promise<void>;
   typingUser: string | null;
   usersWithNotes: User[];
+  updateChatSettings: (chatId: string, settings: Partial<Chat>) => Promise<void>;
+  setNickname: (chatId: string, userId: string, nickname: string) => Promise<void>;
+  reportChat: (chatId: string, reason: string) => Promise<void>;
+  updateGroupMember: (chatId: string, userId: string, action: 'add' | 'remove' | 'make_admin' | 'make_moderator' | 'remove_admin' | 'remove_moderator') => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -116,29 +121,60 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [usersWithNotes, setUsersWithNotes] = useState<User[]>([]);
 
-  // Handle FCM Token from Android Bridge
+  // Handle FCM Token
   useEffect(() => {
-    const saveFcmToken = async () => {
-      if (!currentUser) return;
+    const setupMessaging = async () => {
+      if (!currentUser || !messaging) return;
       
-      // Check if running inside Android WebView with our bridge
-      // @ts-ignore
-      const androidToken = window.AndroidInterface?.getFcmToken?.();
-      
-      if (androidToken && androidToken !== currentUser.fcmToken) {
-        try {
-          await updateDoc(doc(db, 'users', currentUser.uid), {
-            fcmToken: androidToken
-          });
-          setCurrentUser(prev => prev ? { ...prev, fcmToken: androidToken } : null);
-        } catch (error) {
-          console.error('Error saving FCM token:', error);
+      try {
+        // 1. Handle Android Bridge Token
+        // @ts-ignore
+        const androidToken = window.AndroidInterface?.getFcmToken?.();
+        
+        // 2. Handle Web Token
+        let webToken = null;
+        if (!androidToken) {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            webToken = await getToken(messaging, {
+              vapidKey: 'YOUR_VAPID_KEY_IF_NEEDED' // Usually not needed if configured in firebase-applet-config.json
+            });
+          }
         }
+
+        const finalToken = androidToken || webToken;
+        
+        if (finalToken && finalToken !== currentUser.fcmToken) {
+          await updateDoc(doc(db, 'users', currentUser.uid), {
+            fcmToken: finalToken
+          });
+          setCurrentUser(prev => prev ? { ...prev, fcmToken: finalToken } : null);
+        }
+
+        // 3. Listen for foreground messages
+        const unsubscribe = onMessage(messaging, (payload) => {
+          console.log('Foreground message received:', payload);
+          if (payload.notification) {
+            // You could show a custom toast here if you want
+            // For now, we'll just let the browser show it if possible
+            new Notification(payload.notification.title || 'New Message', {
+              body: payload.notification.body,
+              icon: '/logo.png'
+            });
+          }
+        });
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up messaging:', error);
       }
     };
 
     if (currentUser) {
-      saveFcmToken();
+      const unsubPromise = setupMessaging();
+      return () => {
+        unsubPromise.then(unsub => unsub && unsub());
+      };
     }
   }, [currentUser]);
 
@@ -265,6 +301,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [chats, activeChat?.id]);
 
+  // Keep activeChat in sync with chats list
+  useEffect(() => {
+    if (activeChat) {
+      const updatedChat = chats.find(c => c.id === activeChat.id);
+      if (updatedChat) {
+        // Only update if something meaningful changed to avoid loops
+        if (updatedChat.updatedAt?.toMillis() !== activeChat.updatedAt?.toMillis() || 
+            JSON.stringify(updatedChat.unreadCount) !== JSON.stringify(activeChat.unreadCount)) {
+          setActiveChat(updatedChat);
+        }
+      }
+    }
+  }, [chats]);
+
   // Listen to messages
   useEffect(() => {
     if (!activeChat) {
@@ -293,7 +343,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       // Mark messages as seen
       const isRestricted = activeChat.restrictedBy?.includes(currentUser?.uid || '');
-      if (msgList.length > 0 && activeChat.unreadCount?.[currentUser?.uid || ''] && !isRestricted) {
+      const isVisible = document.visibilityState === 'visible';
+      
+      if (msgList.length > 0 && activeChat.unreadCount?.[currentUser?.uid || ''] && !isRestricted && isVisible) {
         updateDoc(doc(db, 'chats', activeChat.id), {
           [`unreadCount.${currentUser?.uid}`]: 0,
           [`lastRead.${currentUser?.uid}`]: serverTimestamp()
@@ -301,12 +353,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       msgList.forEach(async (msg) => {
-        if (msg.senderId !== currentUser?.uid && msg.status !== 'seen' && !isRestricted) {
-          try {
-            await updateDoc(doc(db, 'chats', activeChat.id, 'messages', msg.id), {
-              status: 'seen'
-            });
-          } catch (e) {}
+        if (msg.senderId !== currentUser?.uid && !isRestricted) {
+          const alreadySeen = msg.seenBy?.includes(currentUser?.uid || '');
+          if (!alreadySeen) {
+            try {
+              await updateDoc(doc(db, 'chats', activeChat.id, 'messages', msg.id), {
+                status: 'seen',
+                seenBy: arrayUnion(currentUser?.uid)
+              });
+            } catch (e) {}
+          }
         }
       });
     }, (error) => {
@@ -356,8 +412,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Cleanup expired ephemeral groups
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (!currentUser) return;
       const now = Timestamp.now();
-      const expiredChats = chats.filter(c => c.expiresAt && c.expiresAt.toMillis() < now.toMillis());
+      // Only the creator should clean up to avoid permission issues and race conditions
+      const expiredChats = chats.filter(c => 
+        c.isGroup && 
+        c.expiresAt && 
+        c.expiresAt.toMillis() < now.toMillis() &&
+        c.createdBy === currentUser.uid
+      );
       
       for (const chat of expiredChats) {
         try {
@@ -375,7 +438,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }, 60000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [chats]);
+  }, [chats, currentUser]);
 
   useEffect(() => {
     if (!currentUser || chats.length === 0) {
@@ -628,7 +691,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           updatedAt: serverTimestamp()
         };
 
-        if (!isOtherRestricted && !isOtherBlocked && !isMeBlocked) {
+        if (activeChat.isGroup) {
+          activeChat.participants.forEach(pid => {
+            if (pid !== currentUser.uid) {
+              updateData[`unreadCount.${pid}`] = (activeChat.unreadCount?.[pid] || 0) + 1;
+            }
+          });
+        } else if (otherUserId && !isOtherRestricted && !isOtherBlocked && !isMeBlocked) {
           updateData[`unreadCount.${otherUserId}`] = (activeChat.unreadCount?.[otherUserId!] || 0) + 1;
         }
 
@@ -709,7 +778,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         restrictedBy: arrayRemove(currentUser.uid)
       };
 
-      if (!isOtherRestricted && !isOtherBlocked && !isMeBlocked) {
+      if (chatData.isGroup) {
+        chatData.participants.forEach(pid => {
+          if (pid !== currentUser.uid) {
+            updateData[`unreadCount.${pid}`] = (chatData.unreadCount?.[pid] || 0) + 1;
+          }
+        });
+      } else if (recipientId && !isOtherRestricted && !isOtherBlocked && !isMeBlocked) {
         updateData[`unreadCount.${recipientId}`] = (chatData.unreadCount?.[recipientId] || 0) + 1;
       }
 
@@ -839,6 +914,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         participantDetails,
         updatedAt: serverTimestamp() as Timestamp,
         createdBy: currentUser.uid,
+        admins: [currentUser.uid],
+        moderators: [],
         expiresAt,
         duration,
         deletedBy: [],
@@ -918,6 +995,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `chats/${activeChat.id}/messages/${messageId}`);
+    }
+  };
+
+  const updateGroupMember = async (chatId: string, userId: string, action: 'add' | 'remove' | 'make_admin' | 'make_moderator' | 'remove_admin' | 'remove_moderator') => {
+    if (!currentUser) return;
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+      if (!chatSnap.exists()) return;
+      const chatData = chatSnap.data() as Chat;
+
+      const isAdmin = chatData.admins?.includes(currentUser.uid);
+      const isModerator = chatData.moderators?.includes(currentUser.uid);
+
+      // Only admins can promote/demote
+      if (['make_admin', 'make_moderator', 'remove_admin', 'remove_moderator'].includes(action) && !isAdmin) {
+        throw new Error('Only admins can manage roles');
+      }
+
+      // Admins and Moderators can add/remove members
+      if (['add', 'remove'].includes(action) && !isAdmin && !isModerator) {
+        throw new Error('Only admins or moderators can manage members');
+      }
+
+      switch (action) {
+        case 'add':
+          if (chatData.participants.length >= 20) throw new Error('Group is full (max 20)');
+          await updateDoc(chatRef, { participants: arrayUnion(userId) });
+          break;
+        case 'remove':
+          await updateDoc(chatRef, { 
+            participants: arrayRemove(userId),
+            admins: arrayRemove(userId),
+            moderators: arrayRemove(userId)
+          });
+          break;
+        case 'make_admin':
+          await updateDoc(chatRef, { admins: arrayUnion(userId) });
+          break;
+        case 'remove_admin':
+          await updateDoc(chatRef, { admins: arrayRemove(userId) });
+          break;
+        case 'make_moderator':
+          await updateDoc(chatRef, { moderators: arrayUnion(userId) });
+          break;
+        case 'remove_moderator':
+          await updateDoc(chatRef, { moderators: arrayUnion(userId) });
+          break;
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `chats/${chatId}/members`);
     }
   };
 
@@ -1236,7 +1364,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       startChat, createGroupChat, addReaction, addNoteReaction, deleteMessage, setTyping, updateUserProfile, updateEmailAddress,
       uploadFile, clearChat, deleteChat, deleteAccount, toggleArchive, toggleMute, 
       toggleBlock, toggleRestrict, markAsUnread, setNote, deleteNote, typingUser,
-      usersWithNotes, updateChatSettings, setNickname, reportChat
+      usersWithNotes, updateChatSettings, setNickname, reportChat, updateGroupMember
     }}>
       {children}
     </ChatContext.Provider>
