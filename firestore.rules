@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - photoURL: string (optional)
+    //   - email: string (required)
+    //   - bio: string (optional)
+    //   - gender: string (optional)
+    //   - dob: string (optional)
+    //   - address: string (optional)
+    //   - lastSeen: timestamp (optional)
+    //   - isOnline: bool (optional)
+    //   - typingTo: string (optional)
+    //
+    // Collection: chats
+    // Document ID: chatId
+    // Fields:
+    //   - id: string (required)
+    //   - participants: list (required)
+    //   - participantDetails: map (optional)
+    //   - lastMessage: map (optional)
+    //   - updatedAt: timestamp (required)
+    //   - archivedBy: list (optional)
+    //   - restrictedBy: list (optional)
+    //   - mutedBy: list (optional)
+    //   - blockedBy: list (optional)
+    //   - deletedBy: list (optional)
+    //   - unreadCount: map (optional)
+    //   - theme: string (optional)
+    //   - customBackground: string (optional)
+    //   - quickEmoji: string (optional)
+    //   - nicknames: map (optional)
+    //
+    // Collection: chats/{chatId}/messages
+    // Document ID: messageId
+    // Fields:
+    //   - id: string (required)
+    //   - senderId: string (required)
+    //   - text: string (optional)
+    //   - timestamp: timestamp (required)
+    //   - type: string (required)
+    //   - reactions: map (optional)
+    //   - status: string (required)
+    //   - fileUrl: string (optional)
+    //   - scheduledFor: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isParticipant(chatId) {
+      return isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+    
+    function isParticipantInResource() {
+      return isAuthenticated() && request.auth.uid in resource.data.participants;
+    }
+
+    function isParticipantInRequest() {
+      return isAuthenticated() && request.auth.uid in request.resource.data.participants;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             (data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") || data.email == "") &&
+             (!('photoURL' in data) || (data.photoURL is string || data.photoURL == null)) &&
+             (!('isOnline' in data) || data.isOnline is bool) &&
+             (!('lastSeen' in data) || data.lastSeen is timestamp) &&
+             (!('typingTo' in data) || (data.typingTo is string || data.typingTo == null)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('gender' in data) || (data.gender in ['male', 'female', 'other'])) &&
+             (!('dob' in data) || (data.dob is string)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 200)) &&
+             (!('note' in data) || data.note is map);
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['id', 'participants', 'updatedAt']) &&
+             data.id is string &&
+             data.participants is list && data.participants.size() >= 2 &&
+             data.updatedAt is timestamp &&
+             (!('participantDetails' in data) || data.participantDetails is map) &&
+             (!('lastMessage' in data) || data.lastMessage is map) &&
+             (!('archivedBy' in data) || data.archivedBy is list) &&
+             (!('restrictedBy' in data) || data.restrictedBy is list) &&
+             (!('mutedBy' in data) || data.mutedBy is list) &&
+             (!('blockedBy' in data) || data.blockedBy is list) &&
+             (!('deletedBy' in data) || data.deletedBy is list) &&
+             (!('unreadCount' in data) || data.unreadCount is map) &&
+             (!('theme' in data) || (data.theme is string || data.theme == null)) &&
+             (!('customBackground' in data) || (data.customBackground is string || data.customBackground == null)) &&
+             (!('quickEmoji' in data) || (data.quickEmoji is string || data.quickEmoji == null)) &&
+             (!('nicknames' in data) || data.nicknames is map) &&
+             (!('isGroup' in data) || data.isGroup is bool) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 100)) &&
+             (!('groupPhoto' in data) || (data.groupPhoto is string || data.groupPhoto == null)) &&
+             (!('createdBy' in data) || data.createdBy is string) &&
+             (!('expiresAt' in data) || (data.expiresAt is timestamp || data.expiresAt == null)) &&
+             (!('duration' in data) || (data.duration is number || data.duration == null));
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['id', 'senderId', 'timestamp', 'type', 'status']) &&
+             data.id is string &&
+             data.senderId == request.auth.uid &&
+             data.timestamp is timestamp &&
+             data.type in ['text', 'image', 'voice', 'file'] &&
+             data.status in ['sent', 'delivered', 'seen'] &&
+             (!('text' in data) || (data.text is string || data.text == null)) &&
+             (!('fileUrl' in data) || (data.fileUrl is string || data.fileUrl == null)) &&
+             (!('reactions' in data) || data.reactions is map) &&
+             (!('replyTo' in data) || (data.replyTo is map || data.replyTo == null)) &&
+             (!('isDeleted' in data) || data.isDeleted is bool) &&
+             (!('deletedFor' in data) || data.deletedFor is list) &&
+             (!('scheduledFor' in data) || (data.scheduledFor is timestamp || data.scheduledFor == null));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+    match /chats/{chatId} {
+      allow get: if isAuthenticated() && (resource == null || (request.auth.uid in resource.data.participants && (!('expiresAt' in resource.data) || resource.data.expiresAt == null || request.time < resource.data.expiresAt)));
+      allow list: if isAuthenticated() && (resource.data.participants.hasAny([request.auth.uid]) && (!('expiresAt' in resource.data) || resource.data.expiresAt == null || request.time < resource.data.expiresAt));
+      allow create: if isAuthenticated() && isParticipantInRequest() && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && isParticipantInResource() && isValidChat(request.resource.data);
+      allow delete: if isAuthenticated() && (request.auth.uid in resource.data.participants || request.auth.uid == resource.data.createdBy);
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && isParticipant(chatId);
+        allow create: if isAuthenticated() && isParticipant(chatId) && isValidMessage(request.resource.data);
+        allow update: if isAuthenticated() && isParticipant(chatId);
+        allow delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

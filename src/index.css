@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-monbox-teal: #00796B;
+  --color-monbox-teal-glow: rgba(0, 121, 107, 0.4);
+  --color-monbox-dark: #020617;
+  --color-monbox-surface: rgba(15, 23, 42, 0.6);
+  --color-monbox-border: rgba(255, 255, 255, 0.08);
+}
+
+@layer base {
+  body {
+    @apply bg-[#020617] text-slate-200 antialiased selection:bg-monbox-teal/30;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+  }
+
+  .monbox-glass {
+    @apply bg-slate-900/40 backdrop-blur-2xl border border-white/10 shadow-2xl;
+  }
+  
+  .monbox-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/5 hover:border-monbox-teal/30 transition-all duration-500 rounded-[2rem];
+  }
+
+  .teal-glow {
+    box-shadow: 0 0 40px -10px var(--color-monbox-teal-glow);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Emoji Picker Overrides for Dark Theme */
+.EmojiPickerReact {
+  --epr-bg-color: #0f172a !important;
+  --epr-category-label-bg-color: #1e293b !important;
+  --epr-picker-border-color: rgba(255, 255, 255, 0.1) !important;
+  --epr-search-input-bg-color: rgba(255, 255, 255, 0.05) !important;
+  --epr-search-input-text-color: #f8fafc !important;
+  --epr-category-icon-active-color: #00796B !important;
+  --epr-hover-bg-color: rgba(255, 255, 255, 0.1) !important;
+  --epr-focus-bg-color: rgba(255, 255, 255, 0.1) !important;
+  --epr-highlight-color: #00796B !important;
+  border-radius: 2rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  background-color: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.EmojiPickerReact .epr-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.EmojiPickerReact .epr-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkyChat</title>
+    <script>
+      // Global error handler to catch non-fatal polyfill errors as early as possible
+      (function() {
+        var suppressFetchError = function(event) {
+          var message = (event.message || (event.reason && event.reason.message) || '').toLowerCase();
+          if (message.indexOf('cannot set property fetch') !== -1 || 
+              message.indexOf('fetch of #<window>') !== -1 ||
+              message.indexOf('only a getter') !== -1 ||
+              message.indexOf('fetch is read-only') !== -1) {
+            if (event.preventDefault) event.preventDefault();
+            if (event.stopPropagation) event.stopPropagation();
+            return true;
+          }
+          return false;
+        };
+
+        window.addEventListener('error', suppressFetchError, true);
+        window.addEventListener('unhandledrejection', suppressFetchError, true);
+
+        // Pre-emptively define a dummy setter for fetch if it's a read-only getter
+        try {
+          var descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (descriptor && !descriptor.writable && !descriptor.set && descriptor.configurable) {
+            var originalFetch = window.fetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function() { /* Ignore attempts to overwrite fetch */ },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {}
+
+        // Also intercept console.error for this specific message to keep the console clean
+        var originalConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var msg = args.join(' ').toLowerCase();
+          if (msg.indexOf('cannot set property fetch') !== -1 || 
+              msg.indexOf('fetch of #<window>') !== -1 ||
+              msg.indexOf('only a getter') !== -1) {
+            return;
+          }
+          originalConsoleError.apply(console, args);
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

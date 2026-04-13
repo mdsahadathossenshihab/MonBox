@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the application.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "description": "URL to the user's profile picture." },
+        "email": { "type": "string", "description": "User's email address." },
+        "lastSeen": { "type": "string", "format": "date-time", "description": "Timestamp of the user's last activity." },
+        "isOnline": { "type": "boolean", "description": "Whether the user is currently online." },
+        "typingTo": { "type": "string", "description": "UID of the user they are currently typing to." }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Represents a conversation between users or a group.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the chat." },
+        "participants": { "type": "array", "items": { "type": "string" }, "description": "List of user UIDs in the chat." },
+        "participantDetails": { "type": "object", "description": "Denormalized details of participants for UI display." },
+        "lastMessage": { "type": "object", "description": "The most recent message in the chat." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last update to the chat." },
+        "archivedBy": { "type": "array", "items": { "type": "string" } },
+        "restrictedBy": { "type": "array", "items": { "type": "string" } },
+        "mutedBy": { "type": "array", "items": { "type": "string" } },
+        "blockedBy": { "type": "array", "items": { "type": "string" } },
+        "deletedBy": { "type": "array", "items": { "type": "string" } },
+        "unreadCount": { "type": "object" },
+        "isGroup": { "type": "boolean" },
+        "name": { "type": "string" },
+        "groupPhoto": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "duration": { "type": "number" }
+      },
+      "required": ["id", "participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Represents a single message in a chat.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the message." },
+        "senderId": { "type": "string", "description": "UID of the user who sent the message." },
+        "text": { "type": "string", "description": "Content of the message." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent." },
+        "type": { "type": "string", "enum": ["text", "image", "voice"], "description": "Type of message content." },
+        "reactions": { "type": "object", "description": "Map of user UIDs to their reaction emoji." },
+        "status": { "type": "string", "enum": ["sent", "delivered", "seen"], "description": "Current status of the message." },
+        "fileUrl": { "type": "string", "description": "URL to an attached file/image." }
+      },
+      "required": ["id", "senderId", "timestamp", "type", "status"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Represents a user suggestion or feedback.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "text", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Chat metadata documents."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a specific chat."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Public feedback and suggestions."
+    }
+  }
+}

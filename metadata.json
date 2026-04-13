@@ -1,0 +1,9 @@
+{
+  "name": "MonBox",
+  "description": "A premium, box-themed secure messaging application with real-time chat, group features, and voice/video calling.",
+  "Overwrite": true,
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
