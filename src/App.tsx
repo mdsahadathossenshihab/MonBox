@@ -7,6 +7,7 @@ import SettingsPage from './components/SettingsPage';
 import FeedbackBoard from './components/FeedbackBoard';
 import UserDiscovery from './components/UserDiscovery';
 import IncomingCallModal from './components/IncomingCallModal';
+import GlobalModals from './components/GlobalModals';
 import { CallArea } from './components/CallArea';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -150,6 +151,7 @@ function AppContent() {
       </AnimatePresence>
 
       <IncomingCallModal />
+      <GlobalModals />
       
       {activeCall && (
         <CallArea 

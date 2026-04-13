@@ -83,6 +83,10 @@ interface ChatContextType {
   acceptCall: () => Promise<void>;
   rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
+  isAddingNote: boolean;
+  setIsAddingNote: (val: boolean) => void;
+  selectedNoteUser: User | null;
+  setSelectedNoteUser: (user: User | null) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -128,6 +132,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [usersWithNotes, setUsersWithNotes] = useState<User[]>([]);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [incomingCall, setIncomingCall] = useState<Call | null>(null);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [selectedNoteUser, setSelectedNoteUser] = useState<User | null>(null);
 
   // Handle FCM Token
   useEffect(() => {
@@ -1567,7 +1573,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       uploadFile, clearChat, deleteChat, deleteAccount, toggleArchive, toggleMute, 
       toggleBlock, toggleRestrict, markAsUnread, setNote, deleteNote, typingUser,
       usersWithNotes, updateChatSettings, setNickname, reportChat, updateGroupMember,
-      activeCall, incomingCall, initiateCall, acceptCall, rejectCall, endCall
+      activeCall, incomingCall, initiateCall, acceptCall, rejectCall, endCall,
+      isAddingNote, setIsAddingNote, selectedNoteUser, setSelectedNoteUser
     }}>
       {children}
     </ChatContext.Provider>
