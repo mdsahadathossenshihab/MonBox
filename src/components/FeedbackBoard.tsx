@@ -79,7 +79,7 @@ export default function FeedbackBoard({ onBack }: { onBack: () => void }) {
         </button>
         <div>
           <h1 className="text-xl font-display font-bold text-white">Feedback & Suggestions</h1>
-          <p className="text-xs text-slate-500">Help us improve SkyChat with your ideas</p>
+          <p className="text-xs text-slate-500">Help us improve MonBox with your ideas</p>
         </div>
       </div>
 
