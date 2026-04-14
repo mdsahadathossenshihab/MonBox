@@ -150,8 +150,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!androidToken) {
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
+            // Manually register service worker for better reliability
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+              scope: '/firebase-cloud-messaging-push-scope',
+              type: 'module'
+            });
+
             webToken = await getToken(messaging, {
-              vapidKey: 'BDkFYX_gnBJ4-2nDlsMC211Pg74-2WssOOM4FYir042j8lHKxb71904OiqdcIF7sKNmbp3yQP5zlgK11Uk4Dwhs'
+              vapidKey: 'BDkFYX_gnBJ4-2nDlsMC211Pg74-2WssOOM4FYir042j8lHKxb71904OiqdcIF7sKNmbp3yQP5zlgK11Uk4Dwhs',
+              serviceWorkerRegistration: registration
             });
           }
         }
